@@ -73,18 +73,19 @@ Use the `str` function to check out the structure of both data frames.
 
 
 ```{r flights1_structure}
+str(flights1)
 
 ```
 
 ```{r flights2_structure}
-
+str(flights2)
 ```
 
 Summarize the differences in the default behavior between the `read.csv` function and
 the `read_csv` function with respect to how character variables and date variables
 are treated. Note any other differences you see between the two functions.
 
-> Put your answer here...
+> Put your answer here... read.csv read in all of the variables as factors and integers, including the FL_DATE data as a factor.  read_csv read in FL_DATE as a date column but read in all of the columns that were factors above as character data.  
 
 Your goal now is to get the data read into a dataframe named `flights` that
 eventually has the following data types for each of the columns. You can:
@@ -126,13 +127,13 @@ After you have the `flights` dataframe created, remove `flights1` and `flights2`
 
 ```{r read_flights}
 ## Read in the csv file
-# flights <- ???
+flights <- as.data.frame(flights1)
 
 ## Do any data type conversions needed
-# ???
+flights$FL_DATE <- as.POSIXct(flights$FL_DATE)
 
 ## Remove flights1 and flights2 from the workspace
-# rm(???)
+rm(flights1, flights2)
 
 ## Check out the structure of your flights dataframe
 str(flights)
@@ -145,11 +146,11 @@ Use **dplyr** for all of the questions in this problem.
 Find the number of flights into DTW by origin airport. Display the results in descending order by number of flights.
 
 ```{r flights_by_origin}
-# flights %>%
-#   filter(???) %>% 
-#   group_by(???) %>%
-#   summarize(num_flights = ???) %>%
-#   arrange(???)
+flights %>%
+  filter(DEST == "DTW") %>%
+  group_by(ORIGIN) %>%
+  summarize(num_flights = n()) %>%
+  arrange(desc(num_flights))
 ```
 
 Now use **dplyr** to compute the following summary statistics for ARR_DELAY, grouped by origin airport, for flights into DTW. We did this in the **dplyr** notes.
@@ -160,8 +161,19 @@ Now use **dplyr** to compute the following summary statistics for ARR_DELAY, gro
 * IQR, standard deviation, range
 
 ```{r stats_by_origin}
-
-
+flights %>%
+  filter(DEST == "DTW") %>%
+  group_by(ORIGIN) %>%
+  summarize(num_flights = n(),
+          mean_arr_delay = mean(ARR_DELAY, na.rm = TRUE),
+          median_arr_delay = median(ARR_DELAY,  na.rm = TRUE),
+          min_arr_delay = min(ARR_DELAY, na.rm = TRUE),
+          max_arr_delay = max(ARR_DELAY, na.rm = TRUE),
+          p5_arr_delay = quantile(ARR_DELAY, 0.05, na.rm = TRUE),
+          p95_arr_delay = quantile(ARR_DELAY, 0.95, na.rm = TRUE),
+          iqr_arr_delay = IQR(ARR_DELAY, na.rm = TRUE),
+          sdev_arr_delay = sd(ARR_DELAY, na.rm = TRUE),
+          range_arr_delay = max(ARR_DELAY, na.rm = TRUE) - min(ARR_DELAY, na.rm = TRUE))
 
 ```
 
