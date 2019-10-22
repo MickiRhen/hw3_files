@@ -55,6 +55,7 @@ library(stringr)
 library(lubridate)
 library(readr)
 library(tidyr)
+library(reshape2)
 ```
 
 
@@ -64,7 +65,7 @@ Let's read the data into two `data.frames` named `flights1` and `flights2`. In t
 case we'll use the base R `read.csv` function and in the second we'll use the
 **readr** function `read_csv`. For both we will use default arguments to start.
 
-```{r read_flights}
+```{r read_flights1}
 flights1 <- read.csv("data/flights_mi_2017.csv")
 flights2 <- read_csv("data/flights_mi_2017.csv")
 ```
@@ -181,7 +182,20 @@ flights %>%
 Repeat the above query but just include origin airports for which there were at least 100 flights.
 
 ```{r stats_by_origin_gt100}
-
+flights %>%
+  filter(DEST == "DTW") %>%
+  group_by(ORIGIN) %>%
+  filter(n() > 100) %>%
+  summarize(num_flights = n(),
+          mean_arr_delay = mean(ARR_DELAY, na.rm = TRUE),
+          median_arr_delay = median(ARR_DELAY,  na.rm = TRUE),
+          min_arr_delay = min(ARR_DELAY, na.rm = TRUE),
+          max_arr_delay = max(ARR_DELAY, na.rm = TRUE),
+          p5_arr_delay = quantile(ARR_DELAY, 0.05, na.rm = TRUE),
+          p95_arr_delay = quantile(ARR_DELAY, 0.95, na.rm = TRUE),
+          iqr_arr_delay = IQR(ARR_DELAY, na.rm = TRUE),
+          sdev_arr_delay = sd(ARR_DELAY, na.rm = TRUE),
+          range_arr_delay = max(ARR_DELAY, na.rm = TRUE) - min(ARR_DELAY, na.rm = TRUE))
 ```
 
 Now for something more challenging.
@@ -235,33 +249,39 @@ together by ORIGIN = DEST, creating a new dataframe named `inout`.
 
 ```{r num_in_num_out_soln}
 # Of course you already did queries similar to these up above
-
-# num_in <- flights %>% 
-#   ???
+#
+num_in <-
+flights %>%
+  filter(ORIGIN != "DTW") %>%
+  group_by(ORIGIN) %>%
+  summarize(num_flights = n())
 # 
-# num_out <- flights %>% 
-#   ???
+num_out <- flights %>% 
+  filter(DEST != "DTW") %>%
+  group_by(DEST) %>%
+  summarize(num_flights = n())
 ```
 
+
 ```{r merge_inout_soln}
-## Join the num_in and num_out dataframes
-# inout <- ???_join(num_in, num_out, by = ???)
+# Join the num_in and num_out dataframes  ORIGIN = DEST
+inout <- full_join(num_in, num_out, by = c('ORIGIN' = 'DEST'))
 
 ## Rename columns in new inout dataframe
-# names(???) <- c("AIRPORT", "num_in", "num_out")
+names(inout) <- c("AIRPORT", "num_in", "num_out")
 
 ## Replace NA values in the num_in, num_out with 0.
 # https://stackoverflow.com/questions/8161836/how-do-i-replace-na-values-with-zeros-in-an-r-dataframe
 
-# inout[???] <- ???
+inout[is.na(inout)] <- 0
 
 ## Compute difference between number of flights in and number out
-# inout$balance <- ???
+inout$balance <- inout$num_in - inout$num_out
 
-
+  
 ## Display sorted descending by balance and num_out
-# inout %>% 
-#   arrange(???)
+inout %>%
+  arrange(desc(balance), desc(num_out))
 
 ```
 
@@ -278,13 +298,22 @@ dow_hour_summary_2016 <- read_csv("data/dow_hour_summary.csv")
 Uh oh. The data is in "wide format". You want to facet by day of week but those are the column headings. Use either the **reshape2** or **tidyr** package to convert this data into long format and then create a bar chart showing the total number of flights by hour of day and faceted by day of week.
 
 ```{r reshape}
-# dow_hour_summary_2016_long <- ???
+# added library(reshape2) where we loaded the other libraries up top
+
+dow_hour_summary_2016_long <- melt(dow_hour_summary_2016, id.vars = c("CRS_DEP_HOUR"),
+                                   variable.name = "day_of_week", value.name = "flights")
+
+head(dow_hour_summary_2016_long)
+
 ```
 
 ```{r plot_reshaped}
-# ggplot(dow_hour_summary_2016_long) +
-#   geom_bar(??) +
-#   facet_wrap(??)
+ ggplot(dow_hour_summary_2016_long, aes(x=CRS_DEP_HOUR, y=flights)) +
+   geom_bar(stat="identity", colour="black", fill="blue") +
+   labs(title = "Flights per Hour by Day of Week") +
+   xlab("Hour of Day") +
+   ylab("Number of flights") +
+   facet_wrap(~day_of_week)
 ```
 
 For the rest of the problems we are just interested in flights **out** of DTW. To make our life a little easier, let's create a dataframe called `flights_out`.
@@ -308,11 +337,16 @@ how to do it both ways. HINT: We did this in class.
 ```{r crs_dep_hour}
 ## Add new departure hour field
 
-# flights_out$CRS_DEP_HOUR <- ???
-  
-## Display first 10 rows and just the CRS_DEP_HOUR and CRS_DEP_TIME fields
+flights_out$CRS_DEP_HOUR <- flights_out$CRS_DEP_TIME %/% 100
 
+## or using mutate...
+mutate(flights_out, CRS_DEP_HOUR_2 = CRS_DEP_TIME %/% 100)
+
+## Display first 10 rows and just the CRS_DEP_HOUR and CRS_DEP_TIME fields
 # flights_out[???, ???]
+flights_out %>% select(CRS_DEP_HOUR, CRS_DEP_TIME) %>%
+  head(10)  
+
 
 ```
 
@@ -351,6 +385,7 @@ Are departure delays related to departure period? Start by computing basic summa
 Use **dplyr**.
 
 ```{r}
+
 # ddelay_period_summary <- flights_out %>% 
 #   group_by(CRS_DEP_PRD) %>% 
 #   ???
@@ -358,8 +393,8 @@ Use **dplyr**.
 #   ...
 #   (???)
 
-head(ddelay_period_summary)
-tail(ddelay_period_summary)
+#head(ddelay_period_summary)
+#tail(ddelay_period_summary)
 ```
 
 > Your interepretation here ...
