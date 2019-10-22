@@ -365,7 +365,17 @@ creating the departure period field, makes sure you convert it to a factor if
 it's not already. HINT: The `cut()` function is useful.
 
 ```{r crs_dep_prd}
+# By default, the ranges are open on the left, and closed (includes cut point) on the right 
+# To set it so that ranges are closed on the left and open on the right, like [7,9), use right=FALSE
 
+flights_out$CRS_DEP_PRD <- cut(flights_out$CRS_DEP_HOUR,
+                     breaks=c(0, 5, 12, 18, 23),
+                     labels=c("0-5","6-12","13-18","19-23"))
+# Did it work?
+flights_out %>% select(CRS_DEP_HOUR, CRS_DEP_PRD) %>%
+  head(10) 
+
+# yep :) ... and as a bonus CRS_DEP_PRD is already a factor
 
 ```
 
@@ -375,7 +385,15 @@ of the flight. The **lubridate** package will be helpful.
 
 ```{r fl_dow}
 # Create day of week field called FL_DOW 
+flights_out$FL_DOW <- wday(ymd(flights_out$FL_DATE), label = TRUE, abbr = FALSE)
 
+# Did it work?
+flights_out %>% select(FL_DATE, FL_DOW) %>%
+  head(10) 
+flights_out %>% select(FL_DATE, FL_DOW) %>%
+  tail(10) 
+
+# Hooray!
 ```
 
 ### Problem 5 - Do group by analysis on CRS_DEP_PRD
@@ -386,15 +404,21 @@ Use **dplyr**.
 
 ```{r}
 
-# ddelay_period_summary <- flights_out %>% 
-#   group_by(CRS_DEP_PRD) %>% 
-#   ???
-#   ???
-#   ...
-#   (???)
+ddelay_period_summary <- flights_out %>%
+  group_by(CRS_DEP_PRD) %>%
+  summarize(num_flights = n(),
+        mean_dep_delay = mean(DEP_DELAY, na.rm = TRUE),
+        median_dep_delay = median(DEP_DELAY,  na.rm = TRUE),
+        min_dep_delay = min(DEP_DELAY, na.rm = TRUE),
+        max_dep_delay = max(DEP_DELAY, na.rm = TRUE),
+        p5_dep_delay = quantile(DEP_DELAY, 0.05, na.rm = TRUE),
+        p95_dep_delay = quantile(DEP_DELAY, 0.95, na.rm = TRUE),
+        iqr_dep_delay = IQR(DEP_DELAY, na.rm = TRUE),
+        sdev_dep_delay = sd(DEP_DELAY, na.rm = TRUE),
+        range_dep_delay = max(DEP_DELAY, na.rm = TRUE) - min(DEP_DELAY, na.rm = TRUE))
 
-#head(ddelay_period_summary)
-#tail(ddelay_period_summary)
+head(ddelay_period_summary)
+# tail(ddelay_period_summary) - Do not need a head & a tail. There are only 4 categories
 ```
 
 > Your interepretation here ...
