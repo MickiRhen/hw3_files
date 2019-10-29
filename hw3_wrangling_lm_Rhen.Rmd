@@ -340,7 +340,8 @@ how to do it both ways. HINT: We did this in class.
 flights_out$CRS_DEP_HOUR <- flights_out$CRS_DEP_TIME %/% 100
 
 ## or using mutate...
-mutate(flights_out, CRS_DEP_HOUR_2 = CRS_DEP_TIME %/% 100)
+mutate(flights_out, CRS_DEP_HOUR_2 = CRS_DEP_TIME %/% 100) %>%
+  head(10)
 
 ## Display first 10 rows and just the CRS_DEP_HOUR and CRS_DEP_TIME fields
 # flights_out[???, ???]
@@ -421,12 +422,28 @@ head(ddelay_period_summary)
 # tail(ddelay_period_summary) - Do not need a head & a tail. There are only 4 categories
 ```
 
-> Your interepretation here ...
+> Your interepretation here ...  There are fewer (by a lot) flights departing from DTW in the 0-5 hours.  Flights out spike in the 6-12 hours and then decrease slower for the rest of the day.  The mean delay increases as the day goes on, although the median delay for all time segments is a negative number indicating an early departure. The 5th & 95th % of delay also increase but not as drastically as the original mean statistic micht have alluded to.  This could indicate that there is some outlier data pulling our means up.  Standard deviation and range are also increased with the later time ranges.   
 
 **Hacker Extra** If you'd like, make boxplots or violin plots of DEP_DELAY by
 CRS_DEP_PRD. They won't be pretty. Make them easier to read.
 
+```{r}
 
+ggplot(flights_out, aes(y=DEP_DELAY, x=CRS_DEP_PRD)) + 
+  geom_violin(na.rm = TRUE) +
+  
+  # The following trims the data to that included within the 10th & 90th percentile to deal with outlier issue
+  scale_y_continuous(limits = quantile(flights_out$DEP_DELAY, c(0.1, 0.9), na.rm = TRUE)) +
+  
+  # The following adds a point on each violin plot which shows the mean
+  stat_summary(fun.y=mean, geom="point", size=2, color="red") +
+  geom_text(stat = 'summary', fun.y=mean, aes(label = round(..y.., 2)), nudge_x = 0.1, hjust = 0) +
+  
+  #titles/labels...
+  labs(title = "HACKER EXTRA - Departure Delays out of DTW by Segmented Hours (trimmed)") +
+  ylab("Delay in Minutes") +
+  xlab("Hour Range")
+```
 
 ### Problem 6 - A scatterplot of DEP_DELAY by CRS_DEP_HOUR
 
@@ -435,13 +452,17 @@ Create two versions, a standard scatter plot and one with "jitter".
 Jitter is useful when you have many duplicate points that obscure each other.
 
 ```{r scatter_delay_hour_soln}
-# ggplot(flights_out) + 
-#   geom_point(aes(x=???, y=???)) + 
-#   ggtitle("No jitter")
+ggplot(flights_out) +
+  geom_point(aes(y=DEP_DELAY, x=CRS_DEP_HOUR, color = "red")) + 
+  ggtitle("Departure Delays out of DTW by Hour - no jitter") +
+  ylab("Delay in Minutes") +
+  xlab("Hour") 
 # 
-# ggplot(flights_out) + 
-#   geom_point(aes(x=???, y=???), ???) +
-#   ggtitle("With jitter")
+ggplot(flights_out) +
+  geom_point(aes(y=DEP_DELAY, jitter(x=CRS_DEP_HOUR), color = "red")) + 
+  ggtitle("Departure Delays out of DTW by Hour - with jitter") +
+  ylab("Delay in Minutes") +
+  xlab("Hour")
 ```
 
 ### Problem 7 - Are departure delays related to day of week? 
@@ -449,9 +470,52 @@ Jitter is useful when you have many duplicate points that obscure each other.
 Use plots and/or group by analysis to take a first look at these questions.
 
 ```{r dow_effect}
+flights_out %>%
+  filter(DEP_DELAY > 0) %>%
+  ggplot(aes(x=FL_DOW, y=DEP_DELAY)) +
+  geom_bar(stat="identity", fill="blue") +
+  labs(title = "DTW Departure Number of Delays by Day of Week") +
+  ylab("Number of Departure Delays") +
+  xlab("Day of Week")
 
+# Now calculate delays as a percentage of the number of flights that go out on each day
+#There is probably an easier way to do this... but I'm goin with what I know how to do ;)
+
+#summarize tot flights per day
+tot_flights <- flights_out %>%
+  group_by(FL_DOW) %>%
+  summarize(tot_num_flights = n())
+#Summarize delayed flights by day
+del_flights <- flights_out %>%
+  group_by(FL_DOW) %>%
+  filter(DEP_DELAY > 0) %>%
+  summarize(del_num_flights = n())
+#join the two and calculate delays as a percentage of flights
+percent_del <- full_join(tot_flights, del_flights, by = c('FL_DOW' = 'FL_DOW')) %>%
+  mutate(per_del = del_num_flights / tot_num_flights) 
+#percent_del
+
+#Lets look at the total number of flights per day...
+percent_del %>%
+  ggplot(aes(x=FL_DOW, y=tot_num_flights)) +
+  geom_bar(stat="identity", fill="blue") +
+  labs(title = "DTW Flights by Day of Week") +
+  ylab("Daily Departures") +
+  xlab("Day of Week") 
+
+# make a pretty graph of Departure %'s
+percent_del %>%
+  ggplot(aes(x=FL_DOW, y=per_del)) +
+  geom_bar(stat="identity", fill="blue") +
+  labs(title = "DTW Departure % of Delays by Day of Week") +
+  ylab("Daily Departure Delay %") +
+  xlab("Day of Week") +
+  geom_text(aes(x = FL_DOW, 
+  y = per_del + 0.05, label = round(per_del, 2)))
+
+#When calculated as a percentage of flights the days are more similar than at first glance
 ```
-
+> At first glance it seems like the day of the week has an impact on flight delays.  Graphing the number of flights shows that Sunday has way more delays than any of the other days, with Monday and Tuesdaynearly tying for second.  However, if you take into account the total number of flights on each day the picture is not as drastic.  Sunday still has the most delays, at around 40% of flights, but the other days are not as different as they originally seemed.  Wednesday seems to be the best day of the week to avoid delays as only 27% of flights are delayed on that day.
 
 ### Problem 8 - Linear regression models
 
@@ -491,6 +555,66 @@ null_rmse
 
 Try to build a linear regression model to predict DEP_DELAY that has a lower RMSE than this on the test data. Feel free to create any new fields you'd like as long as you don't include information that would not be available the day before the actual flight - i.e. we need to avoid being accidentally "clairvoyant".
 
+```{r mickis linear model}
+# possible important variables - CARRIER, DEST, CRS_DEP_TIME v CRS_DEP_HOUR v CRS_DEP_PRD, TAXI_OUT, FL_DOW
+#Check for correlation issues
+summary(flights_out_train)
+#
+#Don't see any N/A's in the variables we will use so moving forward...
+mickiLM1 <- lm(DEP_DELAY ~ CARRIER + DEST + CRS_DEP_TIME + FL_DOW, data=flights_out_train)
+summary(mickiLM1)
+
+# Wow, that's too much.  Let's make new variables out of the CARRIER's that tested at the highest # significance levels and maybe remove DEST
+
+```
+```{r mickis additional linear models}
+#Make indicator variables for CARRIER's EV & OO 
+flights_out_train$EV <- ifelse(flights_out_train$CARRIER == "EV", 1, 0) 
+flights_out_train$OO <- ifelse(flights_out_train$CARRIER == "OO", 1, 0) 
+#head(flights_out_train) 
+
+mickiLM2 <- lm(DEP_DELAY ~ EV + OO + CRS_DEP_TIME + FL_DOW, data=flights_out_train)
+summary(mickiLM2)
+
+mickiLM3 <- lm(DEP_DELAY ~ EV + OO + CRS_DEP_HOUR + FL_DOW, data=flights_out_train)
+summary(mickiLM3)
+
+mickiLM4 <- lm(DEP_DELAY ~ EV + OO + CRS_DEP_PRD + FL_DOW, data=flights_out_train)
+summary(mickiLM4)
+
+mickiLM5 <- lm(DEP_DELAY ~ EV + OO + CRS_DEP_PRD, data=flights_out_train)
+summary(mickiLM5)
+```
+```{r}
+#Need to make the test data match the training data
+flights_out_test$EV <- ifelse(flights_out_test$CARRIER == "EV", 1, 0) 
+flights_out_test$OO <- ifelse(flights_out_test$CARRIER == "OO", 1, 0) 
+
+delPredict2 <- predict(mickiLM2, newdata=flights_out_test)
+delPredict3 <- predict(mickiLM3, newdata=flights_out_test)
+delPredict4 <- predict(mickiLM4, newdata=flights_out_test)
+delPredict5 <- predict(mickiLM5, newdata=flights_out_test)
+
+save(flights_out_train, flights_out_test,
+     mickiLM2, mickiLM3, mickiLM4, mickiLM5,
+     delPredict2, delPredict3, delPredict4, delPredict5,
+     file="data/delPredict2345.rdata")
+
+fit_preds <- data.frame(act_del = flights_out_test[,"DEP_DELAY"],
+                          lm2_del = delPredict2,
+                          lm3_del = delPredict3,
+                          lm4_del = delPredict4,
+                          lm5_del = delPredict5)
+
+head(fit_preds)
+
+(RMSE2 <- sqrt(with(fit_preds, sum((act_del - lm2_del)^2))/nrow(fit_preds)))
+(RMSE3 <- sqrt(with(fit_preds, sum((act_del - lm3_del)^2))/nrow(fit_preds)))
+(RMSE4 <- sqrt(with(fit_preds, sum((act_del - lm4_del)^2))/nrow(fit_preds)))
+(RMSE5 <- sqrt(with(fit_preds, sum((act_del - lm5_del)^2))/nrow(fit_preds)))
+
+```
+>Well... all four model RMSE's are less than the simple model RMSE.  Not by much though... a good prediction would require some more work
 
 ### Problem 9 - Bar charts
 
@@ -518,7 +642,19 @@ knitr::include_graphics("images/mean_depdelay_carrier.png")
 
 
 ```{r adv_bar}
+mean_del_carr <- flights_out %>%
+  group_by(CARRIER) %>%
+  summarize(DEP_DELAY = (mean(DEP_DELAY, na.rm = TRUE)))
+head(mean_del_carr)
 
+mean_del_carr %>%
+  ggplot(aes(x=reorder(CARRIER, -DEP_DELAY), y=DEP_DELAY)) +
+  geom_bar(stat="identity", fill="blue") +
+  labs(title = "DTW Departure Mean Delays by Carrier") +
+  ylab("Mean Delay in Minutes") +
+  xlab("Carrier") +
+  geom_text(aes(x = CARRIER,
+  y = DEP_DELAY + .5, label = round(DEP_DELAY, 0)))
 ```
 
 
@@ -536,6 +672,25 @@ knitr::include_graphics("images/depdelay_densities.png")
 
 ```{r densities_depdelay}
 
+flights %>%
+  add_count(ORIGIN) %>%
+  filter(n > 200) %>%
+  group_by(ORIGIN) %>%
+  ggplot(aes(DEP_DELAY)) + geom_density() +
+  facet_wrap(~ORIGIN, scales='free_x') +
+  labs(title = "HACKER EXTRA - Density Plots of DEP_DELAY for Airports with 200+ flights") 
+
+#Hmmm mine has a few more airports listed than yours.  Better check the counts...
+flights %>%
+  group_by(ORIGIN) %>%
+  summarize(num_flights = n()) %>%
+  arrange(desc(num_flights)) %>%
+  head(21) 
+#I have 20 density plots so I will check to make sure the top 20 of 21 airports listed are 200+ flights
+
+#Looks right to me :)
+#Perhaps you filtered out N/A rows's on yours
+
 ```
 
 
@@ -548,6 +703,24 @@ Compute the average number of flights by day of week by carrier. Be careful - yo
 knitr::include_graphics("images/flights_carrier_dow.png")
 ```
 
+```{r hacker_extra_2}
+# flights %>%
+#   add_count(ORIGIN) %>%
+#   filter(n > 200) %>%
+#   group_by(ORIGIN) %>%
+#   ggplot(aes(DEP_DELAY)) + geom_density() +
+#   facet_wrap(~ORIGIN, scales='free_x') +
+#   labs(title = "HACKER EXTRA - Density Plots of DEP_DELAY for Airports with 200+ flights") 
+# flights %>%
+#   mutate(FL_DOW = wday(ymd(flights$FL_DATE), label = TRUE, abbr = FALSE)) %>%
+#   add_count(FL_DOW, CARRIER, FL_DATE) 
+#   #group_by(CARRIER, FL_DOW) %>%
+#   #summarize(average_DEL = count( / n))
+
+
+
+
+```
 
 
 ## Deliverables
