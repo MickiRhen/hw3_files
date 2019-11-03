@@ -86,7 +86,8 @@ Summarize the differences in the default behavior between the `read.csv` functio
 the `read_csv` function with respect to how character variables and date variables
 are treated. Note any other differences you see between the two functions.
 
-> Put your answer here... read.csv read in all of the variables as factors and integers, including the FL_DATE data as a factor.  read_csv read in FL_DATE as a date column but read in all of the columns that were factors above as character data.  
+> Put your answer here...  
+"read.csv" read in all of the variables as factors and integers, including the FL_DATE data as a factor.    "read_csv" read in FL_DATE as a date column but read in all of the columns that were factors above as character data.  
 
 Your goal now is to get the data read into a dataframe named `flights` that
 eventually has the following data types for each of the columns. You can:
@@ -422,7 +423,8 @@ head(ddelay_period_summary)
 # tail(ddelay_period_summary) - Do not need a head & a tail. There are only 4 categories
 ```
 
-> Your interepretation here ...  There are fewer (by a lot) flights departing from DTW in the 0-5 hours.  Flights out spike in the 6-12 hours and then decrease slower for the rest of the day.  The mean delay increases as the day goes on, although the median delay for all time segments is a negative number indicating an early departure. The 5th & 95th % of delay also increase but not as drastically as the original mean statistic micht have alluded to.  This could indicate that there is some outlier data pulling our means up.  Standard deviation and range are also increased with the later time ranges.   
+> Your interepretation here ...  
+There are fewer (by a lot) flights departing from DTW in the 0-5 hours.  Flights out spike in the 6-12 hours and then decrease for the rest of the day.  The mean delay increases as the day goes on, although the median delay for all time segments is a negative number indicating an early departure. The 5th & 95th %'s of delay also increase but not as drastically as the original mean statistic might have alluded to.  This could indicate that there is some outlier data pulling our means up.  Standard deviation and range are also increased with the later time ranges.   
 
 **Hacker Extra** If you'd like, make boxplots or violin plots of DEP_DELAY by
 CRS_DEP_PRD. They won't be pretty. Make them easier to read.
@@ -507,7 +509,7 @@ percent_del %>%
 percent_del %>%
   ggplot(aes(x=FL_DOW, y=per_del)) +
   geom_bar(stat="identity", fill="blue") +
-  labs(title = "DTW Departure % of Delays by Day of Week") +
+  labs(title = "DTW Departure % of Flights Delayed by Day of Week") +
   ylab("Daily Departure Delay %") +
   xlab("Day of Week") +
   geom_text(aes(x = FL_DOW, 
@@ -515,7 +517,7 @@ percent_del %>%
 
 #When calculated as a percentage of flights the days are more similar than at first glance
 ```
-> At first glance it seems like the day of the week has an impact on flight delays.  Graphing the number of flights shows that Sunday has way more delays than any of the other days, with Monday and Tuesdaynearly tying for second.  However, if you take into account the total number of flights on each day the picture is not as drastic.  Sunday still has the most delays, at around 40% of flights, but the other days are not as different as they originally seemed.  Wednesday seems to be the best day of the week to avoid delays as only 27% of flights are delayed on that day.
+> At first glance it seems like the day of the week has an impact on flight delays.  Graphing the number of flights shows that Sunday has way more delays than any of the other days, with Monday and Tuesday nearly tying for second.  However, if you take into account the total number of flights on each day the picture is not as drastic.  Sunday still has the most delays, at around 40% of flights, but the other days are not as different as they originally seemed.  Wednesday seems to be the best day of the week to avoid delays as only 27% of flights are delayed on that day.
 
 ### Problem 8 - Linear regression models
 
@@ -704,20 +706,53 @@ knitr::include_graphics("images/flights_carrier_dow.png")
 ```
 
 ```{r hacker_extra_2}
-# flights %>%
-#   add_count(ORIGIN) %>%
-#   filter(n > 200) %>%
-#   group_by(ORIGIN) %>%
-#   ggplot(aes(DEP_DELAY)) + geom_density() +
-#   facet_wrap(~ORIGIN, scales='free_x') +
-#   labs(title = "HACKER EXTRA - Density Plots of DEP_DELAY for Airports with 200+ flights") 
-# flights %>%
-#   mutate(FL_DOW = wday(ymd(flights$FL_DATE), label = TRUE, abbr = FALSE)) %>%
-#   add_count(FL_DOW, CARRIER, FL_DATE) 
-#   #group_by(CARRIER, FL_DOW) %>%
-#   #summarize(average_DEL = count( / n))
 
+# Apologies upfront... this is going to get messy lol
+#Add dow column to flights
+flights$FL_DOW <- wday(ymd(flights$FL_DATE), label = TRUE, abbr = FALSE) 
+  #head(flights)
 
+#From original data
+startDate <- min(flights$FL_DATE)
+endDate <- max(flights$FL_DATE)
+
+#Now build a sequence between the dates 
+allDates <-seq(from = startDate, to = endDate, by = "days")
+#head(allDates)
+
+#Create a data frame that counts num of dow for all dates in range
+myDF <- data.frame(ALLDATES=allDates) 
+myDF$ALLDATES <- as.POSIXct(myDF$ALLDATES)
+myDF$FL_DOW <- wday(ymd(myDF$ALLDATES), label = TRUE, abbr = FALSE) 
+myDF <- myDF %>%
+  group_by(FL_DOW) %>%
+  summarize(dow_count = n()) 
+
+mynewtable <- merge(flights, myDF[, c("FL_DOW", "dow_count")], by="FL_DOW")
+#head(mynewtable)
+
+#Now, for what we were after...
+mynewesttable <- mynewtable %>%
+  add_count(CARRIER, FL_DOW) %>%
+  mutate(dowabr = substr(FL_DOW, 1, 2)) %>%
+  mutate(FlPerDOW = n/dow_count) %>%
+  group_by_(.dots=c("CARRIER", "FL_DOW", "dowabr")) %>%
+  summarize(avg_flights=mean(FlPerDOW)) 
+head(mynewesttable)
+
+#Need to order the abbreviated dow column 
+mynewesttable$dowabr <- factor(mynewesttable$dowabr,levels = c("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"))
+
+mynewesttable %>%
+  ggplot(aes(x=dowabr, y=avg_flights)) +
+   geom_bar(stat="identity", colour="black", fill="blue") +
+   labs(title = "Hacker Extra #2 - Average Flights per Day") +
+   xlab("Days of Week") +
+   ylab("Average # of Flights") +  
+   facet_wrap(~CARRIER, scales='free_x') 
+
+# I eventually got there... but it was an ugly redundant path! That... was a battle
+# https://github.com/MickiRhen/hw3_files
 
 
 ```
